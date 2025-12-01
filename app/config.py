@@ -13,11 +13,17 @@ MODEL_DIR = "model"
 DATA_DIR = "data"
 FEEDBACK_FILE = os.path.join(DATA_DIR, "feedback_buffer.csv")
 
-# HuggingFace settings (to be filled later)
+# HuggingFace settings
 HF_USERNAME: Optional[str] = os.getenv("HF_USERNAME")
 HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN")
-HF_MODEL_REPO: Optional[str] = None  # Will be set in Week 3
-HF_DATASET_REPO: Optional[str] = None  # Will be set in Week 3
+
+# Repository names (will be set once user provides HF_USERNAME)
+HF_MODEL_REPO: Optional[str] = f"{HF_USERNAME}/sentiment-analysis-model" if HF_USERNAME else None
+HF_DATASET_REPO: Optional[str] = f"{HF_USERNAME}/sentiment-analysis-data" if HF_USERNAME else None
+
+# Toggle for loading from HF Hub vs local disk
+# Set to True in production (HF Spaces), False for local development
+LOAD_MODEL_FROM_HUB: bool = os.getenv("LOAD_MODEL_FROM_HUB", "false").lower() == "true"
 
 # API settings
 API_TITLE = "Sentiment Analysis Self-Learning API"

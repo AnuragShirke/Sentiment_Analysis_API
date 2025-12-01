@@ -2,7 +2,7 @@
 
 **Last Updated:** December 1, 2025  
 **Project Timeline:** 6 Weeks  
-**Current Status:** Week 2 Complete ✓
+**Current Status:** Week 3 Complete ✓
 
 ---
 
@@ -10,7 +10,7 @@
 
 We're building a production-grade sentiment analysis API that continuously improves itself through user feedback and automated weekly retraining. The system uses zero-cost infrastructure and demonstrates real MLOps capabilities.
 
-**Overall Progress:** 33% (2 out of 6 weeks complete)
+**Overall Progress:** 50% (3 out of 6 weeks complete)
 
 ---
 
@@ -171,7 +171,138 @@ sentiment-api/
 
 ---
 
-## Current System Capabilities
+## Week 3: HuggingFace Integration ✅ COMPLETE
+
+**Duration:** Completed in ~3 hours  
+**Goal:** Separate code from ML artifacts and enable cloud-based model/dataset storage
+
+### Deliverables Completed
+
+#### 1. HuggingFace Model Repository ✓
+- **Repo:** `AnuragShirke/sentiment-analysis-model`
+- **URL:** https://huggingface.co/AnuragShirke/sentiment-analysis-model
+- **Contents:**
+  - `model_v1.joblib` (1.63 MB)
+  - `metrics_v1.joblib` (90 bytes)
+- **Upload Script:** `scripts/push_model_hf.py`
+- **Features:**
+  - Automatic repository creation
+  - Versioned model storage
+  - Metrics tracking
+
+#### 2. HuggingFace Dataset Repository ✓
+- **Repo:** `AnuragShirke/sentiment-analysis-data`
+- **URL:** https://huggingface.co/datasets/AnuragShirke/sentiment-analysis-data
+- **Splits:**
+  - `train`: 67,349 samples
+  - `test`: 872 samples
+  - `feedback`: Raw CSV file with user corrections
+- **Upload Script:** `scripts/push_dataset_hf.py`
+- **Strategy:**
+  - train/test as HF Dataset format (same schema)
+  - feedback as raw CSV (different schema to avoid conflicts)
+
+#### 3. Model Loading from HF Hub ✓
+- **Updated:** `app/model_service.py`
+- **Features:**
+  - Toggle between local and HF Hub loading via `LOAD_MODEL_FROM_HUB` env var
+  - Automatic model download and caching (`.hf_cache/`)
+  - Fallback to local loading if HF Hub fails
+  - Supports model versioning
+- **Usage:**
+  ```bash
+  export LOAD_MODEL_FROM_HUB=true  # Load from HF Hub
+  export LOAD_MODEL_FROM_HUB=false # Load from local disk (default)
+  ```
+
+#### 4. Feedback Sync to HF Datasets ✓
+- **Updated:** `app/feedback_service.py`
+- **Method:** `sync_to_hub()` - Manual sync for now (will auto-sync in Week 4)
+- **Approach:** Uploads raw CSV to avoid schema mismatch with train/test
+- **Location:** Stored at `data/feedback_buffer.csv` in HF repo
+
+#### 5. Configuration Updates ✓
+- **Updated:** `app/config.py`
+- **New Settings:**
+  - `HF_USERNAME` - HuggingFace username
+  - `HF_TOKEN` - Access token with write permissions
+  - `HF_MODEL_REPO` - Model repository name
+  - `HF_DATASET_REPO` - Dataset repository name
+  - `LOAD_MODEL_FROM_HUB` - Toggle for HF vs local loading
+- **Created:** `.env.example` - Template for environment variables
+
+### Week 3 Challenges Overcome
+
+1. **Syntax Error in model_service.py**
+   - Issue: Malformed import statement `from antml:parameter name="numpy`
+   - Solution: Fixed to `import numpy as np`
+
+2. **Dataset Schema Mismatch**
+   - Issue: HuggingFace DatasetDict requires all splits to have same columns
+     - train/test: `{text, label, idx}`
+     - feedback: `{text, predicted_label, correct_label, confidence, timestamp, feedback_type}`
+   - Solution: Upload train/test as Dataset, feedback as raw CSV file
+   - Implementation: Modified `update_feedback_only()` to use `upload_file()` instead of `DatasetDict.push_to_hub()`
+
+3. **Environment Variable Configuration**
+   - Issue: Managing credentials securely
+   - Solution: Created `.env.example` template, added `.env` to `.gitignore`
+
+### Architecture After Week 3
+
+```
+┌─────────────────────────────────────────────────────┐
+│           Local Development Environment              │
+│  ┌──────────────┐         ┌────────────────┐        │
+│  │  FastAPI +   │◄────────┤  Gradio UI     │        │
+│  │  Uvicorn     │         └────────────────┘        │
+│  └──────┬───────┘                                    │
+│         │                                            │
+│         ▼                                            │
+│  ┌──────────────────────┐                           │
+│  │  Model Service       │                           │
+│  │  - Local loading     │                           │
+│  │  - HF Hub loading ✓  │                           │
+│  └──────────────────────┘                           │
+└─────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────┐
+│          HuggingFace Cloud (Free Tier)               │
+│                                                       │
+│  ┌───────────────────────────────────────┐          │
+│  │  Model Hub                             │          │
+│  │  AnuragShirke/sentiment-analysis-model │          │
+│  │  - model_v1.joblib                     │          │
+│  │  - metrics_v1.joblib                   │          │
+│  └───────────────────────────────────────┘          │
+│                                                       │
+│  ┌───────────────────────────────────────┐          │
+│  │  Datasets Hub                          │          │
+│  │  AnuragShirke/sentiment-analysis-data  │          │
+│  │  - train (67,349 samples)              │          │
+│  │  - test (872 samples)                  │          │
+│  │  - data/feedback_buffer.csv            │          │
+│  └───────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────┘
+```
+
+### New Files Created
+
+- `scripts/push_model_hf.py` - Upload models to HF Hub
+- `scripts/push_dataset_hf.py` - Upload datasets to HF Hub
+- `.env.example` - Environment variable template
+
+### Updated Files
+
+- `app/config.py` - Added HF configuration
+- `app/model_service.py` - Added HF Hub loading support
+- `app/feedback_service.py` - Added `sync_to_hub()` method
+- `.gitignore` - Added `.env` exclusion
+
+---
+
+## Current System Capabilities (After Week 3)
 
 ### What Works Right Now
 

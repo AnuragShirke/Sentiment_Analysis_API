@@ -108,6 +108,58 @@ class FeedbackService:
             'low_confidence': len(df[df['feedback_type'] == 'low_confidence'])
         }
     
+    def sync_to_hub(self) -> bool:
+        """
+        Sync feedback data to HuggingFace Datasets Hub.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        from app.config import HF_DATASET_REPO, HF_TOKEN
+        
+        if not HF_DATASET_REPO or not HF_TOKEN:
+            print("HuggingFace credentials not set, skipping sync")
+            return False
+        
+        if not os.path.exists(FEEDBACK_FILE):
+            print("No feedback file to sync")
+            return False
+        
+        feedback_df = pd.read_csv(FEEDBACK_FILE)
+        if len(feedback_df) == 0:
+            print("Feedback file is empty, skipping sync")
+            return False
+        
+        try:
+            from datasets import Dataset, load_dataset
+            
+            print(f"Syncing {len(feedback_df)} feedback samples to HuggingFace...")
+            
+            # Try to load existing dataset
+            try:
+                dataset_dict = load_dataset(HF_DATASET_REPO, token=HF_TOKEN)
+            except:
+                # Dataset doesn't exist yet, will be created by push_dataset_hf.py
+                print("Dataset not found on HF Hub. Run scripts/push_dataset_hf.py first.")
+                return False
+            
+            # Update feedback split
+            dataset_dict['feedback'] = Dataset.from_pandas(feedback_df)
+            
+            # Push to hub
+            dataset_dict.push_to_hub(
+                repo_id=HF_DATASET_REPO,
+                token=HF_TOKEN,
+                commit_message=f"Update feedback ({len(feedback_df)} samples)"
+            )
+            
+            print(f"Feedback synced successfully to {HF_DATASET_REPO}")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to sync feedback to HuggingFace: {e}")
+            return False
+    
     def should_log_low_confidence(self, confidence: float) -> bool:
         """Check if prediction confidence is below threshold."""
         return confidence < CONFIDENCE_THRESHOLD
