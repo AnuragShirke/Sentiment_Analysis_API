@@ -78,6 +78,46 @@ def get_next_version(hf_repo: str, hf_token: str) -> str:
         
         return "v2"  # Default if all else fails
 
+def download_base_dataset(hf_dataset_repo: str, hf_token: str) -> tuple:
+    """
+    Download base training and test data from HuggingFace Datasets.
+    
+    Args:
+        hf_dataset_repo: HuggingFace dataset repository
+        hf_token: HF access token
+    
+    Returns:
+        Tuple of (train_path, test_path)
+    """
+    try:
+        from datasets import load_dataset
+        
+        print("Downloading base dataset from HuggingFace...")
+        dataset = load_dataset(hf_dataset_repo, token=hf_token)
+        
+        # Convert to pandas and save locally
+        train_df = dataset['train'].to_pandas()
+        test_df = dataset['test'].to_pandas()
+        
+        # Create data directory
+        os.makedirs('data', exist_ok=True)
+        
+        # Save to CSV
+        train_path = 'data/base_train.csv'
+        test_path = 'data/base_test.csv'
+        
+        train_df.to_csv(train_path, index=False)
+        test_df.to_csv(test_path, index=False)
+        
+        print(f"✓ Downloaded {len(train_df)} training samples")
+        print(f"✓ Downloaded {len(test_df)} test samples")
+        
+        return train_path, test_path
+        
+    except Exception as e:
+        print(f"❌ Failed to download base dataset: {e}")
+        return None, None
+
 def merge_datasets(base_train_path: str, feedback_path: str) -> pd.DataFrame:
     """
     Merge base training data with feedback corrections.
@@ -187,49 +227,67 @@ def main():
     HF_MODEL_REPO = f"{HF_USERNAME}/sentiment-analysis-model"
     HF_DATASET_REPO = f"{HF_USERNAME}/sentiment-analysis-data"
     
-    # Step 1: Download latest feedback
-    print("\n[1/6] Downloading feedback from HuggingFace...")
+    # Step 1: Download base dataset from HuggingFace
+    print("\n[1/7] Downloading base dataset from HuggingFace...")
+    train_path, test_path = download_base_dataset(HF_DATASET_REPO, HF_TOKEN)
+    
+    if not train_path or not test_path:
+        print("❌ Failed to download base dataset. Exiting.")
+        sys.exit(1)
+    
+    # Step 2: Download latest feedback
+    print("\n[2/7] Downloading feedback from HuggingFace...")
     feedback_path = download_feedback(HF_DATASET_REPO, HF_TOKEN)
     
     if not feedback_path:
         print("❌ Failed to download feedback. Exiting.")
         sys.exit(1)
     
-    # Step 2: Merge datasets
-    print("\n[2/6] Merging feedback with base training data...")
-    merged_df = merge_datasets('data/base_train.csv', feedback_path)
+    # Step 3: Merge datasets
+    print("\n[3/7] Merging feedback with base training data...")
+    merged_df = merge_datasets(train_path, feedback_path)
     
     if merged_df is None:
         print("⚠ Insufficient feedback for retraining. Exiting.")
         sys.exit(0)
     
-    # Step 3: Train new model
-    print("\n[3/6] Training new model...")
+    # Step 4: Train new model
+    print("\n[4/7] Training new model...")
     new_model = train_new_model(merged_df)
     
-    # Step 4: Evaluate new model
-    print("\n[4/6] Evaluating new model...")
-    test_df = pd.read_csv('data/base_test.csv')
+    # Step 5: Evaluate new model
+    print("\n[5/7] Evaluating new model...")
+    test_df = pd.read_csv(test_path)
     X_test = test_df['text']
     y_test = test_df['label']
     
     new_metrics = evaluate_model(new_model, X_test, y_test)
     print_evaluation_summary(new_metrics, "New Model")
     
-    # Step 5: Compare with current model
-    print("\n[5/6] Comparing with current model...")
+    # Step 6: Compare with current model
+    print("\n[6/7] Comparing with current model...")
     
-    # Load current model metrics
-    current_metrics_path = 'model/metrics_v1.joblib'  # Will be updated to latest in future
-    old_metrics = load_metrics(current_metrics_path)
+    # Download current model metrics from HF Hub
+    try:
+        from huggingface_hub import hf_hub_download
+        metrics_file = hf_hub_download(
+            repo_id=HF_MODEL_REPO,
+            filename="metrics_v1.joblib",
+            token=HF_TOKEN,
+            cache_dir=".hf_cache"
+        )
+        old_metrics = joblib.load(metrics_file)
+    except Exception as e:
+        print(f"Failed to load current metrics from HF Hub: {e}")
+        old_metrics = {'accuracy': 0.818}  # Default to v1 accuracy
     
     should_deploy, reason = compare_models(new_metrics, old_metrics, IMPROVEMENT_THRESHOLD)
     
     print(f"\nDecision: {reason}")
     
-    # Step 6: Deploy if improved
+    # Step 7: Deploy if improved
     if should_deploy:
-        print("\n[6/6] Deploying new model to HuggingFace Hub...")
+        print("\n[7/7] Deploying new model to HuggingFace Hub...")
         
         # Determine next version
         next_version = get_next_version(HF_MODEL_REPO, HF_TOKEN)
@@ -265,7 +323,7 @@ def main():
             print(f"❌ Failed to upload to HF Hub: {e}")
             sys.exit(1)
     else:
-        print("\n[6/6] Skipping deployment (no improvement)")
+        print("\n[7/7] Skipping deployment (no improvement)")
         print("✓ Current model remains in production")
     
     print("\n" + "="*70)
