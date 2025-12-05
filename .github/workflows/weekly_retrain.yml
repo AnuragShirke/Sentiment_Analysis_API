@@ -52,7 +52,7 @@ jobs:
           echo "**Timestamp:** $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f "model/model_v2.joblib" ] || [ -f "model/model_v3.joblib" ]; then
-            echo "✅ New model version created and deployed" >> $GITHUB_STEP_SUMMARY
+            echo "New model version created and deployed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "ℹ️ No model update (insufficient improvement or feedback)" >> $GITHUB_STEP_SUMMARY
+            echo "No model update (insufficient improvement or feedback)" >> $GITHUB_STEP_SUMMARY
           fi
